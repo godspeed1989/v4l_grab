@@ -1,4 +1,7 @@
 v4l_grab
 ========
 
-video for linux grab
+Program for video grab under linux.    
+Support YUV camera now.    
+
+

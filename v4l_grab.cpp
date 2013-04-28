@@ -7,6 +7,38 @@
 #include <linux/types.h>
 #include <linux/videodev2.h>
 
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+
+v4l_grab::v4l_grab(const char* device, u32 w, u32 h, u32 n_frame)
+{
+	dev = device;
+	width = w;
+	height = h;
+	n_buffer = n_frame;
+	buffers = (buffer*)malloc(n_frame * sizeof(buffer));
+	frame_buffer = (u8*)malloc(width * height * 3 * sizeof(u8));
+	if (buffers == NULL || frame_buffer == NULL)
+	{
+		printf("Out of memory\n");
+		exit(-1);
+	}
+	memset(buffers, 0, n_buffer * sizeof(buffer));
+	index = -1;
+	camera_fd = -1;
+}
+
+v4l_grab::~v4l_grab()
+{
+	free(buffers);
+	free(frame_buffer);
+	for(u32 i_buf = 0; i_buf < n_buffer; i_buf++)
+	{
+		if(buffers[i_buf].start != NULL)
+			munmap(buffers[i_buf].start, buffers[i_buf].length);
+	}
+}
 
 int v4l_grab::init_camera()
 {
@@ -62,12 +94,12 @@ int v4l_grab::init_camera()
 	fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;
 	if(ioctl(camera_fd, VIDIOC_S_FMT, &fmt) == -1)
 	{
-		printf("Unable to setup format\n");
+		printf("Unable to setup format. Just Support YUYV\n");
 		return -1;
 	}
 	if(ioctl(camera_fd, VIDIOC_G_FMT, &fmt) == -1)
 	{
-		printf("Unable to get format\n");
+		printf("Unable to get format.\n");
 		return -1;
 	}
 	printf("fmt.type:\t\t%d\n", fmt.type);
@@ -78,77 +110,124 @@ int v4l_grab::init_camera()
 	printf("pix.width:\t\t%d\n", fmt.fmt.pix.width);
 	printf("pix.field:\t\t%d\n", fmt.fmt.pix.field);
 
-	//set fps
+	// set fps
 	parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	parm.parm.capture.timeperframe.numerator = 10;
 	parm.parm.capture.timeperframe.denominator = 10;
-	ioctl(camera_fd, VIDIOC_S_PARM, &parm);
+	if(ioctl(camera_fd, VIDIOC_S_PARM, &parm) == -1)
+	{
+		printf("Unbale to setup fps.\n");
+		return -1;
+	}
+	
+	if(init_buffer())
+	{
+		printf("Init buffer error.\n");
+		return -1;
+	}
 	printf("Init %s \t[OK]\n", dev);
 
 	return 0;
 }
 
-int v4l_grab::grab()
+int v4l_grab::init_buffer()
 {
 	u32 i_buf;
-	// request for 4 buffers
+	// request for n_frame buffers
 	static struct v4l2_requestbuffers req;
 	static struct v4l2_buffer buf;
-	req.count = n_frame;
+	req.count = n_buffer;
 	req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	req.memory = V4L2_MEMORY_MMAP;
 	if(ioctl(camera_fd, VIDIOC_REQBUFS, &req) == -1)
 	{
 		printf("request for buffers error\n");
+		return -1;
 	}
 
 	// mmap buffers
-	for (i_buf = 0; i_buf < req.count; i_buf++)
+	for(i_buf = 0; i_buf < n_buffer; i_buf++)
 	{
 		buf.index = i_buf;
 		buf.memory = V4L2_MEMORY_MMAP;
 		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		// query buffers
-		if (ioctl(camera_fd, VIDIOC_QUERYBUF, &buf) == -1)
+		if(ioctl(camera_fd, VIDIOC_QUERYBUF, &buf) == -1)
 		{
 			printf("query buffer %d error\n", i_buf);
 			return -1;
 		}
-
-		buffers[i_buf].length = buf.length;
+		// unmap the old frame
+		if(buffers[i_buf].start != NULL)
+			munmap(buffers[i_buf].start, buffers[i_buf].length);
 		// map
 		buffers[i_buf].start =
-			mmap(NULL, buf.length, PROT_READ|PROT_WRITE, MAP_SHARED, camera_fd, buf.m.offset);
-		if (buffers[i_buf].start == MAP_FAILED)
+			mmap(NULL, buf.length, PROT_READ, MAP_SHARED, camera_fd, buf.m.offset);
+		buffers[i_buf].length = buf.length;
+		if(buffers[i_buf].start == MAP_FAILED)
 		{
+			buffers[i_buf].start = NULL;
 			printf("buffer map error\n");
 			return -1;
 		}
 	}
 
-	//TODO: queue???
-	for (i_buf = 0; i_buf < req.count; i_buf++)
+	// queue all n_buffer
+	for(i_buf = 0; i_buf < n_buffer; i_buf++)
 	{
 		buf.index = i_buf;
 		ioctl(camera_fd, VIDIOC_QBUF, &buf);
 	}
 
+	// start to capture stream
 	enum v4l2_buf_type type;
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	ioctl (camera_fd, VIDIOC_STREAMON, &type);
+	ioctl(camera_fd, VIDIOC_STREAMON, &type);
 
-	ioctl(camera_fd, VIDIOC_DQBUF, &buf);
-
-	printf("grab yuyv OK\n");
+	printf("Init Buffer \t[OK]\n");
 	return 0;
+}
+
+int v4l_grab::get_next_frame()
+{
+	static struct v4l2_buffer queue_buf;
+	queue_buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	queue_buf.memory = V4L2_MEMORY_MMAP;
+	// dequeue a frame from the buffer
+	if(ioctl(camera_fd, VIDIOC_DQBUF, &queue_buf) == -1)
+	{
+		return -1;
+	}
+	index = queue_buf.index;
+	return 0;
+}
+
+int v4l_grab::release_frame()
+{
+	static struct v4l2_buffer queue_buf;
+	if(index != -1)
+	{
+		queue_buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		queue_buf.memory = V4L2_MEMORY_MMAP;
+		queue_buf.index = index;
+		// enqueue the frame to the end of the buffer
+		if(ioctl(camera_fd, VIDIOC_QBUF, &queue_buf) == -1)
+		{
+			return -1;
+		}
+		return 0;
+	}
+	return -1;
 }
 
 void v4l_grab::close_camera()
 {
+	ioctl(camera_fd, VIDIOC_STREAMOFF);
 	if(camera_fd != -1)
 	{
 		close(camera_fd);
 	}
+	camera_fd = -1;
 }
 
 static void yuyv_2_rgb888(u8 * pointer, u32 width, u32 height, u8* frame_buffer)
@@ -232,11 +311,17 @@ typedef struct RGBQUAD
 	u8 rgbReserved;
 }__attribute__((packed)) RGBQUAD;
 
-int v4l_grab::save_bmp(const char* filename, u32 idx)
+int v4l_grab::save_bmp(const char* filename)
 {
 	FILE *fp;
 	static BITMAPFILEHEADER bf;
 	static BITMAPINFOHEADER bi;
+	if(index == -1)
+	{
+		printf("index error\n");
+		return -1;
+	}
+	
 	fp = fopen(filename, "wb");
 	if(!fp)
 	{
@@ -244,13 +329,13 @@ int v4l_grab::save_bmp(const char* filename, u32 idx)
 		return -1;
 	}
 	// Setup BITMAPINFOHEADER
-	bi.biSize = 40;
+	bi.biSize = sizeof(bi);
 	bi.biWidth = width;
 	bi.biHeight = height;
 	bi.biPlanes = 1;
 	bi.biBitCount = 24;
 	bi.biCompression = 0;
-	bi.biSizeImage = width*height*3;
+	bi.biSizeImage = width * height * 3;
 	bi.biXPelsPerMeter = 0;
 	bi.biYPelsPerMeter = 0;
 	bi.biClrUsed = 0;
@@ -258,31 +343,34 @@ int v4l_grab::save_bmp(const char* filename, u32 idx)
 
 	// Setup BITMAPFILEHEADER
 	bf.bfType = 0x4d42;
-	bf.bfSize = 54 + bi.biSizeImage;
+	bf.bfOffBits = sizeof(bf) + sizeof(bi);
+	bf.bfSize = bf.bfOffBits + bi.biSizeImage;
 	bf.bfReserved = 0;
-	bf.bfOffBits = 54;
-	
-	idx = (idx < n_frame) ? idx : 0;
-	yuyv_2_rgb888((u8*)buffers[idx].start, width, height, frame_buffer);
-	fwrite(&bf, 14, 1, fp);
-	fwrite(&bi, 40, 1, fp);
+
+	yuyv_2_rgb888((u8*)buffers[index].start, width, height, frame_buffer);
+	fwrite(&bf, sizeof(bf), 1, fp);
+	fwrite(&bi, sizeof(bi), 1, fp);
 	fwrite(frame_buffer, bi.biSizeImage, 1, fp);
-	printf("save %s OK\n", filename);
+	printf("Save %s idx %d OK\n", filename, index);
 	return 0;
 }
 
-int v4l_grab::save_yuv(const char* filename, u32 idx)
+int v4l_grab::save_yuv(const char* filename)
 {
 	FILE *fp;
 	fp = fopen(filename, "wb");
+	if(index == -1)
+	{
+		printf("index error\n");
+		return -1;
+	}
 	if(fp == NULL)
 	{
 		printf("open %s error\n", filename);
 		return -1;
 	}
-	idx = (idx < n_frame) ? idx : 0;
-	fwrite(buffers[idx].start, width*height*2, 1, fp);
-	printf("save %s OK\n", filename);
+	fwrite(buffers[index].start, width * height * 2, 1, fp);
+	printf("save %s idx %d OK\n", filename, index);
 	fclose(fp);
 	return 0;
 }
