@@ -222,6 +222,7 @@ void v4l_grab::close_camera()
 	{
 		if(buffers[i_buf].start != NULL)
 			munmap(buffers[i_buf].start, buffers[i_buf].length);
+		buffers[i_buf].start = NULL;
 	}
 	if(camera_fd != -1)
 	{
