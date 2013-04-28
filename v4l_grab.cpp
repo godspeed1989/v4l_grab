@@ -62,11 +62,11 @@ int v4l_grab::init_camera()
 		printf("bus_info:\t%s\n", cap.bus_info);
 		printf("version:\t%d\n", cap.version);
 		printf("capabilities:\t%x\n", cap.capabilities);
-		if ((cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) == V4L2_CAP_VIDEO_CAPTURE)
+		if((cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) == V4L2_CAP_VIDEO_CAPTURE)
 		{
 			printf("Device %s: supports capture.\n", dev);
 		}
-		if ((cap.capabilities & V4L2_CAP_STREAMING) == V4L2_CAP_STREAMING)
+		if((cap.capabilities & V4L2_CAP_STREAMING) == V4L2_CAP_STREAMING)
 		{
 			printf("Device %s: supports streaming.\n", dev);
 		}
@@ -77,7 +77,7 @@ int v4l_grab::init_camera()
 	printf("Support format:\n");
 	while(ioctl(camera_fd, VIDIOC_ENUM_FMT, &fmtdesc) != -1)
 	{
-		printf("	%d.%s\n", fmtdesc.index+1, fmtdesc.description);
+		printf("    %d.%s\n", fmtdesc.index+1, fmtdesc.description);
 		fmtdesc.index++;
 	}
 
@@ -99,7 +99,7 @@ int v4l_grab::init_camera()
 	}
 	printf("fmt.type:\t\t%d\n", fmt.type);
 	printf("pix.pixelformat:\t%c%c%c%c\n",
-			fmt.fmt.pix.pixelformat & 0xFF, (fmt.fmt.pix.pixelformat >> 8) & 0xFF,
+			(fmt.fmt.pix.pixelformat) & 0xFF, (fmt.fmt.pix.pixelformat >> 8) & 0xFF,
 			(fmt.fmt.pix.pixelformat >> 16) & 0xFF, (fmt.fmt.pix.pixelformat >> 24) & 0xFF);
 	printf("pix.height:\t\t%d\n", fmt.fmt.pix.height);
 	printf("pix.width:\t\t%d\n", fmt.fmt.pix.width);
@@ -107,12 +107,16 @@ int v4l_grab::init_camera()
 
 	// set fps
 	parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	parm.parm.capture.timeperframe.numerator = 10;
-	parm.parm.capture.timeperframe.denominator = 10;
+	parm.parm.capture.timeperframe.numerator = 1;
+	parm.parm.capture.timeperframe.denominator = 15;
 	if(ioctl(camera_fd, VIDIOC_S_PARM, &parm) == -1)
 	{
 		printf("Unbale to setup fps.\n");
 		return -1;
+	}
+	else
+	{
+		printf("set FPS to %d\n", parm.parm.capture.timeperframe.denominator);
 	}
 	
 	if(init_buffer())
