@@ -46,8 +46,8 @@ typedef struct v4l_grab
 	int init_camera();
 	void close_camera();
 	int grab();
-	int save_bmp(const char* filename);
-	int save_yuv(const char* filename);
+	int save_bmp(const char* filename, u32 idx);
+	int save_yuv(const char* filename, u32 idx);
 }v4l_grab;
 
 #endif //__V4LGRAB_H___

@@ -13,8 +13,8 @@ int main(void)
 		return -1;
 	}
 	v4lgrab.grab();
-	v4lgrab.save_bmp(BMP);
-	v4lgrab.save_yuv(YUV);
+	v4lgrab.save_bmp(BMP, 22);
+	v4lgrab.save_yuv(YUV, 3);
 	v4lgrab.close_camera();
 
 	return 0;

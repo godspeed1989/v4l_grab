@@ -205,7 +205,7 @@ static void yuyv_2_rgb888(u8 * pointer, u32 width, u32 height, u8* frame_buffer)
 
 typedef struct BITMAPFILEHEADER
 {
-	u16	bfType;        // the flag of bmp, value is "BM"
+	u16	bfType;       // the flag of bmp, value is "BM"
 	u32 bfSize;       // size of BMP file
 	u32 bfReserved;   // 0
 	u32 bfOffBits;    // must be 54
@@ -232,7 +232,7 @@ typedef struct RGBQUAD
 	u8 rgbReserved;
 }__attribute__((packed)) RGBQUAD;
 
-int v4l_grab::save_bmp(const char* filename)
+int v4l_grab::save_bmp(const char* filename, u32 idx)
 {
 	FILE *fp;
 	static BITMAPFILEHEADER bf;
@@ -262,7 +262,8 @@ int v4l_grab::save_bmp(const char* filename)
 	bf.bfReserved = 0;
 	bf.bfOffBits = 54;
 	
-	yuyv_2_rgb888((u8*)buffers[0].start, width, height, frame_buffer);
+	idx = (idx < n_frame) ? idx : 0;
+	yuyv_2_rgb888((u8*)buffers[idx].start, width, height, frame_buffer);
 	fwrite(&bf, 14, 1, fp);
 	fwrite(&bi, 40, 1, fp);
 	fwrite(frame_buffer, bi.biSizeImage, 1, fp);
@@ -270,7 +271,7 @@ int v4l_grab::save_bmp(const char* filename)
 	return 0;
 }
 
-int v4l_grab::save_yuv(const char* filename)
+int v4l_grab::save_yuv(const char* filename, u32 idx)
 {
 	FILE *fp;
 	fp = fopen(filename, "wb");
@@ -279,8 +280,8 @@ int v4l_grab::save_yuv(const char* filename)
 		printf("open %s error\n", filename);
 		return -1;
 	}
-	
-	fwrite(buffers[0].start, width*height*2, 1, fp);
+	idx = (idx < n_frame) ? idx : 0;
+	fwrite(buffers[idx].start, width*height*2, 1, fp);
 	printf("save %s OK\n", filename);
 	fclose(fp);
 	return 0;
