@@ -33,11 +33,6 @@ v4l_grab::~v4l_grab()
 {
 	free(buffers);
 	free(frame_buffer);
-	for(u32 i_buf = 0; i_buf < n_buffer; i_buf++)
-	{
-		if(buffers[i_buf].start != NULL)
-			munmap(buffers[i_buf].start, buffers[i_buf].length);
-	}
 }
 
 int v4l_grab::init_camera()
@@ -223,6 +218,11 @@ int v4l_grab::release_frame()
 void v4l_grab::close_camera()
 {
 	ioctl(camera_fd, VIDIOC_STREAMOFF);
+	for(u32 i_buf = 0; i_buf < n_buffer; i_buf++)
+	{
+		if(buffers[i_buf].start != NULL)
+			munmap(buffers[i_buf].start, buffers[i_buf].length);
+	}
 	if(camera_fd != -1)
 	{
 		close(camera_fd);
