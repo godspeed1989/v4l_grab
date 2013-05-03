@@ -11,13 +11,13 @@
 #include <cstring>
 #include <cstdlib>
 
-v4l_grab::v4l_grab(const char* device, u32 w, u32 h, u32 n_frame)
+v4l_grab::v4l_grab(const char* device, u32 w, u32 h, u32 n_buffers)
 {
 	dev = device;
 	width = w;
 	height = h;
-	n_buffer = n_frame;
-	buffers = (buffer*)malloc(n_frame * sizeof(buffer));
+	n_buffer = n_buffers;
+	buffers = (buffer*)malloc(n_buffers * sizeof(buffer));
 	frame_buffer = (u8*)malloc(width * height * 3 * sizeof(u8));
 	if (buffers == NULL || frame_buffer == NULL)
 	{
@@ -287,6 +287,11 @@ static void yuyv_2_rgb888(u8 * pointer, u32 width, u32 height, u8* frame_buffer)
 	}
 }
 
+void v4l_grab::fb_yuv_2_rgb()
+{
+	yuyv_2_rgb888((u8*)buffers[index].start, width, height, frame_buffer);
+}
+
 typedef struct BITMAPFILEHEADER
 {
 	u16	bfType;       // the flag of bmp, value is "BM"
@@ -352,7 +357,7 @@ int v4l_grab::save_bmp(const char* filename)
 	bf.bfSize = bf.bfOffBits + bi.biSizeImage;
 	bf.bfReserved = 0;
 
-	yuyv_2_rgb888((u8*)buffers[index].start, width, height, frame_buffer);
+	fb_yuv_2_rgb();
 	fwrite(&bf, sizeof(bf), 1, fp);
 	fwrite(&bi, sizeof(bi), 1, fp);
 	fwrite(frame_buffer, bi.biSizeImage, 1, fp);
@@ -375,7 +380,7 @@ int v4l_grab::save_yuv(const char* filename)
 		return -1;
 	}
 	fwrite(buffers[index].start, width * height * 2, 1, fp);
-	printf("save %s idx %d OK\n", filename, index);
+	printf("Save %s idx %d OK\n", filename, index);
 	fclose(fp);
 	return 0;
 }

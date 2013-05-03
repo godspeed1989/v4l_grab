@@ -19,6 +19,7 @@ int main(void)
 		sprintf(BMP, "./image%d.bmp", i);
 		sprintf(YUV, "./image%d.yuv", i);
 		v4lgrab.get_next_frame();
+		v4lgrab.fb_yuv_2_rgb();
 		v4lgrab.save_bmp(BMP);
 		v4lgrab.save_yuv(YUV);
 		v4lgrab.release_frame();
