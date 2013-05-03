@@ -12,3 +12,4 @@ $(TARGET): test.o v4l_grab.o
 
 clean:
 	rm -rf *.bmp *.yuv *.o
+
