@@ -294,7 +294,7 @@ void v4l_grab::fb_yuv_2_rgb()
 
 typedef struct BITMAPFILEHEADER
 {
-	u16	bfType;       // the flag of bmp, value is "BM"
+	u16 bfType;       // the flag of bmp, value is "BM"
 	u32 bfSize;       // size of BMP file
 	u32 bfReserved;   // 0
 	u32 bfOffBits;    // must be 54
@@ -313,6 +313,7 @@ typedef struct BITMAPINFOHEADER
 	u32 biClrUsed;
 	u32 biClrImportant;
 }__attribute__((packed)) BITMAPINFOHEADER;
+#if 0
 typedef struct RGBQUAD
 {
 	u8 rgbBlue;
@@ -320,6 +321,7 @@ typedef struct RGBQUAD
 	u8 rgbRed;
 	u8 rgbReserved;
 }__attribute__((packed)) RGBQUAD;
+#endif
 
 int v4l_grab::save_bmp(const char* filename)
 {
